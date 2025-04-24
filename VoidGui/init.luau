@@ -33,7 +33,7 @@ local RobloxInstance = Instance
 local module: VoidMeta = {} :: VoidMeta
 module.__index = module
 
-local DefaultFolder = script:WaitForChild("Default")
+local DefaultFolder = script:FindFirstChild("Default")
 local DefaultInstances: {[string]: Instance} = {}
 
 local ReservedWords = {
@@ -69,16 +69,19 @@ local function HasProperty(Object: Instance, Property: string): (boolean, any)
 	end)
 end
 
-for _, Module: ModuleScript in DefaultFolder:GetDescendants() do
-	if not Module:IsA("ModuleScript") then
-		continue
-	end
+if DefaultFolder then
+	for _, Module: ModuleScript in DefaultFolder:GetDescendants() do
+		if not Module:IsA("ModuleScript") then
+			continue
+		end
 
-	local DefaultInstance = RobloxInstance.new(Module.Name)
-	for Property, Value in require(Module) :: {[string]: any} do
-		DefaultInstance[Property] = Value
+		local DefaultInstance = RobloxInstance.new(Module.Name)
+		for Property, Value in require(Module) :: {[string]: any} do
+			DefaultInstance[Property] = Value
+		end
+		
+		DefaultInstances[Module.Name] = DefaultInstance
 	end
-	DefaultInstances[Module.Name] = DefaultInstance
 end
 
 function module.new(Gui: {[string]: any}, Parent: VoidGui?): VoidGui
