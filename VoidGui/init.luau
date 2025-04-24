@@ -38,10 +38,10 @@ local DefaultInstances: {[string]: Instance} = {}
 
 local ReservedWords = {
 	Children = function(self: VoidGui, Gui: {[string]: any})
-		for _, Propertys in Gui.Children do
-			local Child = module.new(Propertys, self)
+		for _, Properties in Gui.Children do
+			local Child = module.new(Properties, self)
 			self.Children[Child.VoidID] = {
-				Name = Propertys.Name or Propertys.Class,
+				Name = Properties.Name or Properties.Class,
 				Child = Child,
 			}
 		end
