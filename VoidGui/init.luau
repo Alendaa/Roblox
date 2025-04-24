@@ -5,7 +5,7 @@ type VoidMeta = {
 	Remove: (self: VoidGui) -> (),
 	Set: (self: VoidGui, Property: string, Value: any) -> (),
 	Get: (self: VoidGui, Property: string) -> any,
-	Tween: (sef: VoidGui, TweenInfo: TweenInfo, Value: {[string]: any}) -> Tween,
+	Tween: (self: VoidGui, TweenInfo: TweenInfo, Value: {[string]: any}) -> Tween,
 	Connect: (self: VoidGui, EventName: string, Function: (self: VoidGui, ...any) -> ()) -> (),
 	Disconnect: (self: VoidGui, EventName: string) -> boolean,
 	FindFirstChild: (self: VoidGui, Name: string) -> VoidGui,
@@ -15,7 +15,7 @@ type VoidMeta = {
 export type VoidGui = typeof(setmetatable({} :: {
 	VoidID: string,
 	Values: {[string]: any},
-	Childrens: {[string]: {Name: string, Child: VoidGui}},
+	Children: {[string]: {Name: string, Child: VoidGui}},
 	Connections: {[string]: RBXScriptConnection},
 	Parent: VoidGui?,
 	Instance: Instance
@@ -33,10 +33,10 @@ local DefaultFolder = script:WaitForChild("Default")
 local DefaultInstances: {[string]: Instance} = {}
 
 local ReservedWords = {
-	Childrens = function(self: VoidGui, Gui: {[string]: any})
-		for _, Propertys in Gui.Childrens do
+	Children = function(self: VoidGui, Gui: {[string]: any})
+		for _, Propertys in Gui.Children do
 			local Child = module.new(Propertys, self)
-			self.Childrens[Child.VoidID] = {
+			self.Children[Child.VoidID] = {
 				Name = Propertys.Name or Propertys.Class,
 				Child = Child,
 			}
@@ -102,7 +102,7 @@ function module.new(Gui: {[string]: any} | Instance, Parent: VoidGui?): VoidGui
 
 	self.VoidID = HttpService:GenerateGUID(false)
 	self.Values = if Gui.Values then table.clone(Gui.Values) else {}
-	self.Childrens = {}
+	self.Children = {}
 	self.Connections = {}
 	self.Parent = Parent
 	self.Instance = Instance
@@ -127,8 +127,8 @@ function module.new(Gui: {[string]: any} | Instance, Parent: VoidGui?): VoidGui
 		Instance[Property] = Value
 	end
 	
-	if Parent and not Parent.Childrens[self.VoidID] then
-		Parent.Childrens[self.VoidID] = {
+	if Parent and not Parent.Children[self.VoidID] then
+		Parent.Children[self.VoidID] = {
 			Name = Gui.Name or Gui.Class,
 			Child = self,
 		}
@@ -197,7 +197,7 @@ end
 
 function module:FindFirstChild(Name: string): VoidGui
 	local Child: VoidGui = nil
-	for _, v in self.Childrens do
+	for _, v in self.Children do
 		if v.Name == Name then
 			Child = v.Child
 			break
@@ -210,7 +210,7 @@ function module:FindFirstChild(Name: string): VoidGui
 end
 
 function module:Destroy(): ()
-	for _, v in self.Childrens do
+	for _, v in self.Children do
 		v.Child:Destroy()
 	end
 
