@@ -1,16 +1,20 @@
+--!strict
+
 type VoidMeta = {
 	__index: VoidMeta,
 	new: (Gui: {[string]: any}, Parent: VoidGui?) -> VoidGui,
 	Add: (self: VoidGui, Gui: {[string]: any}) -> VoidGui,
 	Remove: (self: VoidGui) -> (),
-	Set: (self: VoidGui, Property: string, Value: any) -> (),
-	Get: (self: VoidGui, Property: string) -> any,
+	SetPropertyValue: (self: VoidGui, Property: string, Value: any) -> (),
+	GetPropertyValue: (self: VoidGui, Property: string) -> any,
 	Tween: (self: VoidGui, TweenInfo: TweenInfo, Value: {[string]: any}) -> Tween,
 	Connect: (self: VoidGui, EventName: string, Function: (self: VoidGui, ...any) -> ()) -> (),
 	Disconnect: (self: VoidGui, EventName: string) -> boolean,
-	FindFirstChild: (self: VoidGui, Name: string) -> VoidGui,
+	FindFirstChild: (self: VoidGui, Name: string, Recursive: boolean?) -> VoidGui,
 	Destroy: (self: VoidGui) -> (),
 }
+
+
 
 export type VoidGui = typeof(setmetatable({} :: {
 	VoidID: string,
@@ -44,9 +48,9 @@ local ReservedWords = {
 	end,
 
 	Events = function(self: VoidGui, Gui: {[string]: any})
-		for Event: string, Function in Gui.Events :: {[string]: (self: VoidGui, ...any) -> ()} do
-			local Signal = self.Instance[Event] :: RBXScriptSignal
-			self.Connections[Event] = Signal:Connect(function(...)
+		for EventName: string, Function in Gui.Events :: {[string]: (self: VoidGui, ...any) -> ()} do
+			local Signal = (self.Instance :: any)[EventName] :: RBXScriptSignal
+			self.Connections[EventName] = Signal:Connect(function(...)
 				Function(self, ...)
 			end)
 		end
@@ -59,9 +63,9 @@ local SkipWords = {
 	Parent = true
 }
 
-local function HasProperty(Instance: Instance, Property: string): (boolean, any)
+local function HasProperty(Object: Instance, Property: string): (boolean, any)
 	return pcall(function()
-		return Instance[Property]
+		return (Object :: any)[Property]
 	end)
 end
 
@@ -71,21 +75,17 @@ for _, Module: ModuleScript in DefaultFolder:GetDescendants() do
 	end
 
 	local DefaultInstance = RobloxInstance.new(Module.Name)
-	for Property, Value in require(Module) do
+	for Property, Value in require(Module) :: {[string]: any} do
 		DefaultInstance[Property] = Value
 	end
 	DefaultInstances[Module.Name] = DefaultInstance
 end
 
-function module.new(Gui: {[string]: any} | Instance, Parent: VoidGui?): VoidGui
+function module.new(Gui: {[string]: any}, Parent: VoidGui?): VoidGui
 	if typeof(Parent) ~= "table" and Parent ~= nil then
-		error("typeof Parent ~= table")
+		error("Type of Parent ~= table")
 	elseif typeof(Parent) == "table" and getmetatable(Parent) ~= module then
-		error("Parent type ~= VoidGui")
-	end
-	
-	if typeof(Gui) ~= "table" and Gui:IsA("Instance") and Parent then
-		Gui.Parent = Parent.Instance
+		error("Type of Parent ~= VoidGui")
 	end
 
 	local self: VoidGui = setmetatable({}, module) :: VoidGui
@@ -147,7 +147,7 @@ function module:Add(Gui: {[string]: any}): VoidGui
 	return module.new(Gui, self)
 end
 
-function module:Set(Property: string, Value: any): ()
+function module:SetPropertyValue(Property: string, Value: any): ()
 	local Instance = self.Instance
 
 	local PropertyExist, ReturnedValue = HasProperty(Instance, Property)
@@ -155,12 +155,12 @@ function module:Set(Property: string, Value: any): ()
 		error(ReturnedValue)
 	end
 	
-	Instance[Property] =
+	(Instance :: any)[Property] =
 		if Property == "Parent" and typeof(Value) == "table" and getmetatable(Value) == module then Value.Instance
 		else Value
 end
 
-function module:Get(Property: string): any
+function module:GetPropertyValue(Property: string): any
 	return select(2, HasProperty(self.Instance, Property))
 end
 
@@ -195,15 +195,19 @@ function module:Disconnect(EventName: string): boolean
 	return true
 end
 
-function module:FindFirstChild(Name: string): VoidGui
+function module:FindFirstChild(Name: string, Recursive: boolean?): VoidGui
 	local Child: VoidGui = nil
 	for _, v in self.Children do
 		if v.Name == Name then
 			Child = v.Child
 			break
 		end
-
-		Child = v.Child:FindFirstChild(Name)
+	end
+	
+	if Recursive then
+		for _, v in self.Children do
+			v.Child:FindFirstChild(Name, true)
+		end
 	end
 
 	return Child
@@ -213,10 +217,16 @@ function module:Destroy(): ()
 	for _, v in self.Children do
 		v.Child:Destroy()
 	end
+	
+	table.clear(self.Children)
+	table.clear(self.Connections)
 
 	self.Instance:Destroy()
-	self.Parent[self.VoidID] = nil
-
+	
+	if self.Parent then
+		self.Parent.Children[self.VoidID] = nil
+	end
+	
 	for i, Connection: RBXScriptConnection in self.Connections do
 		Connection:Disconnect()
 		self.Connections[i] = nil
