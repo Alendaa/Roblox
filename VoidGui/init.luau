@@ -7,14 +7,13 @@ type VoidMeta = {
 	Remove: (self: VoidGui) -> (),
 	SetPropertyValue: (self: VoidGui, Property: string, Value: any) -> (),
 	GetPropertyValue: (self: VoidGui, Property: string) -> any,
-	Tween: (self: VoidGui, TweenInfo: TweenInfo, Value: {[string]: any}) -> Tween,
+	FindFirstChild: (self: VoidGui, Name: string, Recursive: boolean?) -> VoidGui,
+	GetChildren: (self: VoidGui) -> {[number]: VoidGui},
 	Connect: (self: VoidGui, EventName: string, Function: (self: VoidGui, ...any) -> ()) -> (),
 	Disconnect: (self: VoidGui, EventName: string) -> boolean,
-	FindFirstChild: (self: VoidGui, Name: string, Recursive: boolean?) -> VoidGui,
+	Tween: (self: VoidGui, TweenInfo: TweenInfo, Value: {[string]: any}) -> Tween,
 	Destroy: (self: VoidGui) -> (),
 }
-
-
 
 export type VoidGui = typeof(setmetatable({} :: {
 	VoidID: string,
@@ -79,16 +78,16 @@ if DefaultFolder then
 		for Property, Value in require(Module) :: {[string]: any} do
 			DefaultInstance[Property] = Value
 		end
-		
+
 		DefaultInstances[Module.Name] = DefaultInstance
 	end
 end
 
 function module.new(Gui: {[string]: any}, Parent: VoidGui?): VoidGui
 	if typeof(Parent) ~= "table" and Parent ~= nil then
-		error("Type of Parent ~= table")
+		error("Type of Parent ~= table", 2)
 	elseif typeof(Parent) == "table" and getmetatable(Parent) ~= module then
-		error("Type of Parent ~= VoidGui")
+		error("Type of Parent ~= VoidGui", 2)
 	end
 
 	local self: VoidGui = setmetatable({}, module) :: VoidGui
@@ -99,7 +98,7 @@ function module.new(Gui: {[string]: any}, Parent: VoidGui?): VoidGui
 
 	local Class = Gui.Class
 	if not Class then
-		error("Index Class not found.")
+		error("Index Class not found.", 2)
 	end
 	local Instance = if DefaultInstances[Class] then DefaultInstances[Class]:Clone() else RobloxInstance.new(Class)
 
@@ -119,7 +118,7 @@ function module.new(Gui: {[string]: any}, Parent: VoidGui?): VoidGui
 		local IsReserved = ReservedWords[Property]
 
 		if not PropertyExist and not IsReserved then
-			error(ReturnedValue)
+			error(ReturnedValue, 2)
 		end
 
 		if IsReserved then
@@ -129,19 +128,19 @@ function module.new(Gui: {[string]: any}, Parent: VoidGui?): VoidGui
 
 		Instance[Property] = Value
 	end
-	
+
 	if Parent and not Parent.Children[self.VoidID] then
 		Parent.Children[self.VoidID] = {
 			Name = Gui.Name or Gui.Class,
 			Child = self,
 		}
 	end
-	
+
 	Instance.Parent = 
 		if Gui.Parent == nil and Parent then Parent.Instance
 		elseif typeof(Gui.Parent) == "Instance" then Gui.Parent
 		elseif typeof(Gui.Parent) == "table" and getmetatable(Gui.Parent) == module then Gui.Parent.Instance
-		else error(`Type of the index Parent is {typeof(Gui.Parent)}, it needs to be VoidGui or Instance`)
+		else error(`Type of the index Parent is {typeof(Gui.Parent)}, it needs to be VoidGui or Instance`, 2)
 
 	return self
 end
@@ -155,9 +154,9 @@ function module:SetPropertyValue(Property: string, Value: any): ()
 
 	local PropertyExist, ReturnedValue = HasProperty(Instance, Property)
 	if not PropertyExist then
-		error(ReturnedValue)
+		error(ReturnedValue, 2)
 	end
-	
+
 	(Instance :: any)[Property] =
 		if Property == "Parent" and typeof(Value) == "table" and getmetatable(Value) == module then Value.Instance
 		else Value
@@ -167,8 +166,33 @@ function module:GetPropertyValue(Property: string): any
 	return select(2, HasProperty(self.Instance, Property))
 end
 
-function module:Tween(TweenInfo: TweenInfo, Value: {[string]: any}): Tween
-	return TweenService:Create(self.Instance, TweenInfo, Value)
+function module:FindFirstChild(Name: string, Recursive: boolean?): VoidGui
+	local Child: VoidGui = nil
+	for _, v in self.Children do
+		if v.Name == Name then
+			Child = v.Child
+			break
+		end
+	end
+
+	if Recursive then
+		for _, v in self.Children do
+			v.Child:FindFirstChild(Name, true)
+		end
+	end
+
+	return Child
+end
+
+function module:GetChildren(): {[number]: VoidGui}
+	local self: VoidGui = self :: VoidGui
+	local Children: {[number]: VoidGui} = {} :: {[number]: VoidGui}
+	
+	for _, Child in self.Children do
+		table.insert(Children, Child.Child)
+	end
+	
+	return Children
 end
 
 function module:Connect(EventName: string, Function: (self: VoidGui, ...any) -> ()): ()
@@ -179,7 +203,7 @@ function module:Connect(EventName: string, Function: (self: VoidGui, ...any) -> 
 	local Instance = self.Instance
 	local EventExist, Signal: RBXScriptSignal = HasProperty(Instance, EventName)
 	if not EventExist then
-		error(Signal)
+		error(Signal, 2)
 	end
 
 	self.Connections[EventName] = Signal:Connect(function(...)
@@ -198,38 +222,24 @@ function module:Disconnect(EventName: string): boolean
 	return true
 end
 
-function module:FindFirstChild(Name: string, Recursive: boolean?): VoidGui
-	local Child: VoidGui = nil
-	for _, v in self.Children do
-		if v.Name == Name then
-			Child = v.Child
-			break
-		end
-	end
-	
-	if Recursive then
-		for _, v in self.Children do
-			v.Child:FindFirstChild(Name, true)
-		end
-	end
-
-	return Child
+function module:Tween(TweenInfo: TweenInfo, Value: {[string]: any}): Tween
+	return TweenService:Create(self.Instance, TweenInfo, Value)
 end
 
 function module:Destroy(): ()
 	for _, v in self.Children do
 		v.Child:Destroy()
 	end
-	
+
 	table.clear(self.Children)
 	table.clear(self.Connections)
 
 	self.Instance:Destroy()
-	
+
 	if self.Parent then
 		self.Parent.Children[self.VoidID] = nil
 	end
-	
+
 	for i, Connection: RBXScriptConnection in self.Connections do
 		Connection:Disconnect()
 		self.Connections[i] = nil
