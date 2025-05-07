@@ -174,10 +174,10 @@ function module:FindFirstChild(Name: string, Recursive: boolean?): VoidGui
 			break
 		end
 	end
-
-	if Recursive then
+	
+	if Recursive and not Child then
 		for _, v in self.Children do
-			v.Child:FindFirstChild(Name, true)
+			Child = v.Child:FindFirstChild(Name, true)
 		end
 	end
 
@@ -187,11 +187,11 @@ end
 function module:GetChildren(): {[number]: VoidGui}
 	local self: VoidGui = self :: VoidGui
 	local Children: {[number]: VoidGui} = {} :: {[number]: VoidGui}
-	
+
 	for _, Child in self.Children do
 		table.insert(Children, Child.Child)
 	end
-	
+
 	return Children
 end
 
