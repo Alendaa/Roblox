@@ -1,249 +1,136 @@
 --!strict
 
-type VoidMeta = {
-	__index: VoidMeta,
-	new: (Gui: {[string]: any}, Parent: VoidGui?) -> VoidGui,
-	Add: (self: VoidGui, Gui: {[string]: any}) -> VoidGui,
-	Remove: (self: VoidGui) -> (),
-	SetPropertyValue: (self: VoidGui, Property: string, Value: any) -> (),
-	GetPropertyValue: (self: VoidGui, Property: string) -> any,
-	FindFirstChild: (self: VoidGui, Name: string, Recursive: boolean?) -> VoidGui,
-	GetChildren: (self: VoidGui) -> {[number]: VoidGui},
-	Connect: (self: VoidGui, EventName: string, Function: (self: VoidGui, ...any) -> ()) -> (),
-	Disconnect: (self: VoidGui, EventName: string) -> boolean,
-	Tween: (self: VoidGui, TweenInfo: TweenInfo, Value: {[string]: any}) -> Tween,
-	Destroy: (self: VoidGui) -> (),
+local ComponentValue = require("./VoidGui/Components/Value")
+
+type Structure<T> = {[string]: any,}
+
+type Meta = {
+	__index: Meta,
+	__newindex: (t: Gui<any>, k: any, v: any) -> (),
+
+	New: <T>(Structure: {[string]: any}) -> Gui<T>,
+	Value: ComponentValue.new
 }
 
-export type VoidGui = typeof(setmetatable({} :: {
-	VoidID: string,
-	Values: {[string]: any},
-	Children: {[string]: {Name: string, Child: VoidGui}},
-	Connections: {[string]: RBXScriptConnection},
-	Parent: VoidGui?,
-	Instance: Instance
-}, {} :: VoidMeta))
+export type Gui<T> = {
+	_Children: {[Gui<T>]: {Value: Gui<T>, Name: string}?},
+	_Connections: {[number]: () -> ()?},
+	_Instance: T?,
+} & T
 
-local TweenService = game:GetService("TweenService")
-local HttpService = game:GetService("HttpService")
+type Keys = {
+	Reserved: {[string]: (Structure: Structure<any>, self: Gui<any>, Object: Instance) -> ()},
+	Ignore: {[string]: boolean}
+}
 
-local RobloxInstance = Instance
-
-local module: VoidMeta = {} :: VoidMeta
+local module: Meta = {} :: Meta
 module.__index = module
-
-local DefaultFolder = script:FindFirstChild("Default")
-local DefaultInstances: {[string]: Instance} = {}
-
-local ReservedWords = {
-	Children = function(self: VoidGui, Gui: {[string]: any})
-		for _, Properties in Gui.Children do
-			local Child = module.new(Properties, self)
-			self.Children[Child.VoidID] = {
-				Name = Properties.Name or Properties.Class,
-				Child = Child,
-			}
-		end
-	end,
-
-	Events = function(self: VoidGui, Gui: {[string]: any})
-		for EventName: string, Function in Gui.Events :: {[string]: (self: VoidGui, ...any) -> ()} do
-			local Signal = (self.Instance :: any)[EventName] :: RBXScriptSignal
-			self.Connections[EventName] = Signal:Connect(function(...)
-				Function(self, ...)
-			end)
-		end
-	end,
-}
-
-local SkipWords = {
-	Values = true,
-	Class = true,
-	Parent = true
-}
-
-local function HasProperty(Object: Instance, Property: string): (boolean, any)
-	return pcall(function()
-		return (Object :: any)[Property]
-	end)
-end
-
-if DefaultFolder then
-	for _, Module: ModuleScript in DefaultFolder:GetDescendants() do
-		if not Module:IsA("ModuleScript") then
-			continue
-		end
-
-		local DefaultInstance = RobloxInstance.new(Module.Name)
-		for Property, Value in require(Module) :: {[string]: any} do
-			DefaultInstance[Property] = Value
-		end
-
-		DefaultInstances[Module.Name] = DefaultInstance
-	end
-end
-
-function module.new(Gui: {[string]: any}, Parent: VoidGui?): VoidGui
-	if typeof(Parent) ~= "table" and Parent ~= nil then
-		error("Type of Parent ~= table", 2)
-	elseif typeof(Parent) == "table" and getmetatable(Parent) ~= module then
-		error("Type of Parent ~= VoidGui", 2)
-	end
-
-	local self: VoidGui = setmetatable({}, module) :: VoidGui
-
-	if typeof(Gui) ~= "table" then
-		return self
-	end
-
-	local Class = Gui.Class
-	if not Class then
-		error("Index Class not found.", 2)
-	end
-	local Instance = if DefaultInstances[Class] then DefaultInstances[Class]:Clone() else RobloxInstance.new(Class)
-
-	self.VoidID = HttpService:GenerateGUID(false)
-	self.Values = if Gui.Values then table.clone(Gui.Values) else {}
-	self.Children = {}
-	self.Connections = {}
-	self.Parent = Parent
-	self.Instance = Instance
-
-	for Property: string, Value: any in next, Gui do
-		if SkipWords[Property] then
-			continue
-		end
-
-		local PropertyExist, ReturnedValue = HasProperty(Instance, Property)
-		local IsReserved = ReservedWords[Property]
-
-		if not PropertyExist and not IsReserved then
-			error(ReturnedValue, 2)
-		end
-
-		if IsReserved then
-			IsReserved(self, Gui)
-			continue
-		end
-
-		Instance[Property] = Value
-	end
-
-	if Parent and not Parent.Children[self.VoidID] then
-		Parent.Children[self.VoidID] = {
-			Name = Gui.Name or Gui.Class,
-			Child = self,
-		}
-	end
-
-	Instance.Parent = 
-		if Gui.Parent == nil and Parent then Parent.Instance
-		elseif typeof(Gui.Parent) == "Instance" then Gui.Parent
-		elseif typeof(Gui.Parent) == "table" and getmetatable(Gui.Parent) == module then Gui.Parent.Instance
-		else error(`Type of the index Parent is {typeof(Gui.Parent)}, it needs to be VoidGui or Instance`, 2)
-
-	return self
-end
-
-function module:Add(Gui: {[string]: any}): VoidGui
-	return module.new(Gui, self)
-end
-
-function module:SetPropertyValue(Property: string, Value: any): ()
-	local Instance = self.Instance
-
-	local PropertyExist, ReturnedValue = HasProperty(Instance, Property)
-	if not PropertyExist then
-		error(ReturnedValue, 2)
-	end
-
-	(Instance :: any)[Property] =
-		if Property == "Parent" and typeof(Value) == "table" and getmetatable(Value) == module then Value.Instance
-		else Value
-end
-
-function module:GetPropertyValue(Property: string): any
-	return select(2, HasProperty(self.Instance, Property))
-end
-
-function module:FindFirstChild(Name: string, Recursive: boolean?): VoidGui
-	local Child: VoidGui = nil
-	for _, v in self.Children do
-		if v.Name == Name then
-			Child = v.Child
-			break
-		end
-	end
-	
-	if Recursive and not Child then
-		for _, v in self.Children do
-			Child = v.Child:FindFirstChild(Name, true)
-		end
-	end
-
-	return Child
-end
-
-function module:GetChildren(): {[number]: VoidGui}
-	local self: VoidGui = self :: VoidGui
-	local Children: {[number]: VoidGui} = {} :: {[number]: VoidGui}
-
-	for _, Child in self.Children do
-		table.insert(Children, Child.Child)
-	end
-
-	return Children
-end
-
-function module:Connect(EventName: string, Function: (self: VoidGui, ...any) -> ()): ()
-	if self.Connections[EventName] then
+module.__newindex = function(t, k, v)
+	local Object = t._Instance
+	if not Object then
 		return
 	end
 
-	local Instance = self.Instance
-	local EventExist, Signal: RBXScriptSignal = HasProperty(Instance, EventName)
-	if not EventExist then
-		error(Signal, 2)
-	end
+	(Object :: any)[k] = v
+end
 
-	self.Connections[EventName] = Signal:Connect(function(...)
-		Function(self, ...)
+local Keys: Keys = {} :: Keys
+Keys.Reserved = {
+	Children = function(Structure: Structure<any>, self: Gui<any>)
+		for _, Properties in Structure.Children do
+			if Properties.Parent == nil then
+				Properties.Parent = self
+			end
+
+			task.defer(function()
+				local Child = module.New(Properties);
+				(self._Children :: any)[Child] = {
+					Value = Child,
+					Name = Structure.Name or Structure.Class
+				}
+			end)
+		end
+	end,
+
+	Events = function(_Structure: Structure<any>, _self: Gui<any>)
+		
+	end,
+
+	Parent = function(Structure: Structure<any>, _, Object: Instance)
+		local Parent = Structure.Parent
+		local ParentType = typeof(Parent)
+
+		if ParentType ~= "table" and ParentType ~= "nil" and ParentType ~= "Instance" then
+			error("Unsuported type of Parent.", 2)
+		end
+
+		Object.Parent = if ParentType == "Instance" then Parent
+			elseif ParentType == "table" and getmetatable(Parent) == module then Parent._Instance
+			else nil
+	end
+}
+
+Keys.Ignore = {
+	Class = true,
+}
+
+local function HasProperty(Object: any, Property: any): (boolean, any)
+	return pcall(function()
+		return Object[Property]
 	end)
 end
 
-function module:Disconnect(EventName: string): boolean
-	if not self.Connections[EventName] then
-		return false
+
+local function StructureToInstance<T>(Structure: {[string]: any}, self: Gui<T>): T
+	local Class = Structure.Class
+	if typeof(Class) ~= "string" then
+		error(`Type of index Class is {typeof(Class)} ~= string.`, 2)
+	end
+	
+	local Object = (Instance.new(Class) :: any) :: T
+
+	for Property: string, Value: any in Structure do
+		if Keys.Ignore[Property] then
+			continue
+		elseif Keys.Reserved[Property] then
+			Keys.Reserved[Property](Structure, self, Object :: any)
+			continue
+		end
+
+		local PropertyExist, ReturnedValue = HasProperty(Object, Property)
+		if not PropertyExist then
+			error(ReturnedValue, 2)
+		end 	
+		
+		if typeof(Value) and typeof(ReturnedValue) == "function" then
+			error("Use events index.")
+		end
+		
+		if typeof(Value) == "table" and getmetatable(Value) == ComponentValue then
+			(Object :: any)[Property] = Value();
+
+			table.insert(self._Connections, (Value :: ComponentValue.Value).Event:Connect(function(NewValue: any)
+				(Object :: any)[Property] = NewValue
+			end))
+
+			continue
+		end
+
+		(Object :: any)[Property] = Value
 	end
 
-	self.Connections[EventName]:Disconnect()
-	self.Connections[EventName] = nil
-
-	return true
+	return Object
 end
 
-function module:Tween(TweenInfo: TweenInfo, Value: {[string]: any}): Tween
-	return TweenService:Create(self.Instance, TweenInfo, Value)
+function module.New<T>(Structure: Structure<T>): Gui<T>
+	local self = {}	
+	self._Children = {}
+	self._Connections = {}
+	self._Instance = StructureToInstance(Structure, self :: Gui<T>)
+
+	return setmetatable(self, module) :: Gui<T>
 end
 
-function module:Destroy(): ()
-	for _, v in self.Children do
-		v.Child:Destroy()
-	end
-
-	table.clear(self.Children)
-	table.clear(self.Connections)
-
-	self.Instance:Destroy()
-
-	if self.Parent then
-		self.Parent.Children[self.VoidID] = nil
-	end
-
-	for i, Connection: RBXScriptConnection in self.Connections do
-		Connection:Disconnect()
-		self.Connections[i] = nil
-	end
-end
+module.Value = ComponentValue.new
 
 return module
